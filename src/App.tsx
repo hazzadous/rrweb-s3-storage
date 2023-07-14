@@ -21,7 +21,7 @@ import * as rrweb from 'rrweb';
 import 'rrweb-player/dist/style.css';
 import { useRef, useEffect, useState } from 'react';
 import { v4 } from 'uuid';
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { HashRouter, Routes, Route, Link } from "react-router-dom";
 import { IDBPDatabase, openDB } from 'idb';
 import React from 'react';
 
@@ -92,12 +92,12 @@ function App() {
   // the recordings list and playback (RecordingsListPage).
   return (
     <RecordingsDbProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/" element={<RecordingsListPage />} />
           <Route path="/session" element={<RRWebRecordedPage />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </RecordingsDbProvider>
   );
 }
