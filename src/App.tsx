@@ -51,6 +51,8 @@ import React from 'react';
 // If the IndexedDB version needs updating, we create the 'recordings' object
 // store.
 
+const RECORDINGS_DATABASE_NAME = 'rrweb-recordings';
+const RECORDING_EVENT_STORE_NAME = 'recordings';
 const RecordingsDbContext = React.createContext<IDBPDatabase | null>(null);
 
 const RecordingsDbProvider = ({ children }: { children: React.ReactNode }) => {
@@ -61,7 +63,7 @@ const RecordingsDbProvider = ({ children }: { children: React.ReactNode }) => {
     // Open the IndexedDB. The IndexedDB includes a single store called
     // 'recordings' which contains all the recordings events. Each event
     // is stored as a separate object.
-    openDB('rrweb-recordings', 1, {
+    openDB(RECORDINGS_DATABASE_NAME, 1, {
       upgrade(db) {
         // Create the recordings store.
         try {
@@ -126,7 +128,7 @@ const RRWebRecordedPage = () => {
     rrweb.record({
       async emit(event) {
         // Persist the event to IndexedDB.
-        await recordingsDb.add('recordings', {
+        await recordingsDb.add(RECORDING_EVENT_STORE_NAME, {
           sessionId,
           rrwebEvent: event,
         }, `${sessionId}-${counterRef.current++}`);
@@ -170,7 +172,7 @@ const useRecordings = () => {
   const recordingsDb = useRecordingsDb();
 
   useEffect(() => {
-    recordingsDb.getAllKeys('recordings').then((keys) => {
+    recordingsDb.getAllKeys(RECORDING_EVENT_STORE_NAME).then((keys) => {
       // Get the unique session IDs from the keys. This isn't very efficient but
       // will do for now. A nicer way would be to store the session metadata
       // in a separate object store.
@@ -189,7 +191,7 @@ const useRecordingEvents = (sessionId: string) => {
   const recordingsDb = useRecordingsDb();
 
   useEffect(() => {
-    recordingsDb.getAll('recordings', IDBKeyRange.only(sessionId)).then((events) => {
+    recordingsDb.getAll(RECORDING_EVENT_STORE_NAME, IDBKeyRange.only(sessionId)).then((events) => {
       // Sort the events by sequence number.
       events.sort((a, b) => a.sequence - b.sequence);
       setEvents(events.map((event) => event.rrwebEvent));
