@@ -171,8 +171,10 @@ const useRecordings = () => {
 
   useEffect(() => {
     recordingsDb.getAllKeys('recordings').then((keys) => {
-      // Get the unique session IDs from the keys.
-      const sessionIds = keys.map((key) => key.split('-')[0]);
+      // Get the unique session IDs from the keys. This isn't very efficient but
+      // will do for now. A nicer way would be to store the session metadata
+      // in a separate object store.
+      const sessionIds = keys.flatMap((key) => key instanceof String ? [key.split('-')[0]] : []);
       const uniqueSessionIds = Array.from(new Set(sessionIds));
       setRecordings(uniqueSessionIds);
     });

@@ -1,0 +1,60 @@
+# The project is at the time of writing deployed to GitHub pages for simplicity.
+# It doesn't require any dependencies so we simply run pnpm build and upload the 
+# dist folder to GitHub pages, using the new upload-pages-artifact action.
+# The upload action is configured to run on push to main branch only, but the
+# rest of the workflow is triggered on any PR to main branch.
+
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: '8'
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v3
+        name: Setup pnpm cache
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - run: pnpm install
+      - run: pnpm build
+
+      - name: Upload dist folder to GitHub pages
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v2
