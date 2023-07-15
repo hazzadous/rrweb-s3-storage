@@ -21,7 +21,7 @@ import * as rrweb from 'rrweb';
 import 'rrweb-player/dist/style.css';
 import { useRef, useEffect, useState } from 'react';
 import { v4 } from 'uuid';
-import { HashRouter, Routes, Route, Link } from "react-router-dom";
+import { HashRouter, Routes, Route, Link, useParams, Navigate } from "react-router-dom";
 import { IDBPDatabase, openDB } from 'idb';
 import React from 'react';
 
@@ -64,14 +64,12 @@ const RecordingsDbProvider = ({ children }: { children: React.ReactNode }) => {
     // 'recordings' which contains all the recordings events. Each event
     // is stored as a separate object.
     openDB(RECORDINGS_DATABASE_NAME, 1, {
-      upgrade(db) {
-        // Create the recordings store.
-        try {
+      upgrade(db, oldVersion) {
+        // Create the recordings store if 1 is between oldVersion and
+        // newVersion.
+        if (oldVersion < 1) {
           db.createObjectStore('recordings');
           console.info('Created recordings IndexedDB')
-        } catch (err) {
-          console.error(err);
-          throw err;
         }
       },
     }).then((db) => {
@@ -96,7 +94,9 @@ function App() {
     <RecordingsDbProvider>
       <HashRouter>
         <Routes>
-          <Route path="/" element={<RecordingsListPage />} />
+          <Route path="/" element={<Navigate to="/replay/" />} />
+          <Route path="/replay/" element={<RecordingsListPage />} />
+          <Route path="/replay/:sessionId" element={<RecordingsListPage />} />
           <Route path="/session" element={<RRWebRecordedPage />} />
         </Routes>
       </HashRouter>
@@ -118,8 +118,11 @@ const useRecordingsDb = () => {
 const RRWebRecordedPage = () => {
   // A page on which there are some elements to interact with. The page
   // creates a new session ID on load, and then records all events with
-  // that session ID into IndexedDB.
-  const sessionId = v4();
+  // that session ID into IndexedDB. To give some kind or order, we prefix the
+  // sessionID with the current timestamp in an iso1806 format to it's not too 
+  // hard to find the most recent session ID. We use a ref to store the session
+  // ID so that it doesn't change on re-renders.
+  const sessionId = useRef(`${new Date().toISOString()}-${v4()}`);
   const counterRef = useRef(0);
   const recordingsDb = useRecordingsDb();
 
@@ -128,10 +131,12 @@ const RRWebRecordedPage = () => {
     rrweb.record({
       async emit(event) {
         // Persist the event to IndexedDB.
+        const sequence = counterRef.current++;
         await recordingsDb.add(RECORDING_EVENT_STORE_NAME, {
-          sessionId,
+          sessionId: sessionId.current,
           rrwebEvent: event,
-        }, `${sessionId}-${counterRef.current++}`);
+          sequence: sequence,
+        }, `${sessionId.current}-${sequence}`);
       },
     });
   })
@@ -176,8 +181,18 @@ const useRecordings = () => {
       // Get the unique session IDs from the keys. This isn't very efficient but
       // will do for now. A nicer way would be to store the session metadata
       // in a separate object store.
-      const sessionIds = keys.flatMap((key) => key instanceof String ? [key.split('-')[0]] : []);
-      const uniqueSessionIds = Array.from(new Set(sessionIds));
+      const sessionIds = keys.flatMap((key) => typeof key === 'string' ? [key.split('-').slice(0, -1).join("-")] : [])
+      // Filter out session IDs that have fewer than 5 events. This is to
+      // avoid showing sessions that were created by mistake. To do this we
+      // first group the events by session ID, and then filter out the
+      // sessions with fewer than 5 events.
+      const sessionIdsByCount = sessionIds.reduce((acc, sessionId) => {
+        acc[sessionId] = (acc[sessionId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      const sessionIdsWithEnoughEvents = Object.entries(sessionIdsByCount).filter(([_, count]) => count >= 5).map(([sessionId, _]) => sessionId);
+      // Get the unique session IDs.
+      const uniqueSessionIds = [...new Set(sessionIdsWithEnoughEvents)];
       setRecordings(uniqueSessionIds);
     });
   }, []);
@@ -191,7 +206,8 @@ const useRecordingEvents = (sessionId: string) => {
   const recordingsDb = useRecordingsDb();
 
   useEffect(() => {
-    recordingsDb.getAll(RECORDING_EVENT_STORE_NAME, IDBKeyRange.only(sessionId)).then((events) => {
+    recordingsDb.getAll(RECORDING_EVENT_STORE_NAME, IDBKeyRange.bound(`${sessionId}-0`, `${sessionId}-9999999`)
+    ).then((events) => {
       // Sort the events by sequence number.
       events.sort((a, b) => a.sequence - b.sequence);
       setEvents(events.map((event) => event.rrwebEvent));
@@ -206,7 +222,7 @@ const RecordingsListPage = () => {
   // clicking on one, loads the player to the right. We link to the rrweb
   // recording playground page from here, opening it in a new tab.
   const recordings = useRecordings();
-  const [selectedRecording, setSelectedRecording] = useState<string | null>(null);
+  const { sessionId } = useParams();
 
   return (
     <div className="flex">
@@ -216,16 +232,16 @@ const RecordingsListPage = () => {
         <ul>
           {recordings.map((recording) => (
             <li key={recording}>
-              <a href="#" onClick={() => setSelectedRecording(recording)}>{recording}</a>
+              <Link to={`/replay/${recording}`}>{recording}</Link>
             </li>
           ))}
         </ul>
       </div>
       <div className="flex-1">
-        {selectedRecording ? (
+        {sessionId ? (
           <>
             <h2>Player</h2>
-            <RRWebPlayerComponent sessionId={selectedRecording} />
+            <RRWebPlayerComponent sessionId={sessionId} />
           </>
         ) : (
           <p>Select a recording to play.</p>
@@ -245,7 +261,7 @@ const RRWebPlayerComponent = ({ sessionId }: { sessionId: string }) => {
   const events = useRecordingEvents(sessionId);
 
   useEffect(() => {
-    if (playerElement.current) {
+    if (playerElement.current && events.length > 2) {
       // If we have an element, create the player and set the ref. Note we use
       // live mode as documented here:
       // https://github.com/rrweb-io/rrweb/blob/master/docs/recipes/live-mode.md
@@ -253,6 +269,7 @@ const RRWebPlayerComponent = ({ sessionId }: { sessionId: string }) => {
         target: playerElement.current,
         props: {
           events: events,
+          autoPlay: true,
         }
       });
 
@@ -261,13 +278,16 @@ const RRWebPlayerComponent = ({ sessionId }: { sessionId: string }) => {
     }
 
     return () => {
-      // Cleanup the player and remove any elements
+      // Cleanup the player and remove any elements that rrwebReplayer may have
+      // added. I'm not 100% sure how to do this properly, but this seems to
+      // work. It's possibly leaking memory though.
       if (playerRef.current) {
-        playerRef.current.pause()
+        playerRef.current.getReplayer().destroy();
+        playerElement.current?.removeChild(playerElement.current?.firstChild!)
         playerRef.current = null;
       }
     }
-  }, [playerElement.current]);
+  }, [playerElement.current, events]);
 
   // Render the player element
   return (
