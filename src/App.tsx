@@ -124,7 +124,6 @@ const RRWebRecordedPage = () => {
   // ID so that it doesn't change on re-renders.
   const sessionId = useRef(`${new Date().toISOString()}-${v4()}`);
   const counterRef = useRef(0);
-  const recordingsDb = useRecordingsDb();
 
   // Start rrweb recording on load.
   useEffect(() => {
@@ -132,11 +131,14 @@ const RRWebRecordedPage = () => {
       async emit(event) {
         // Persist the event to IndexedDB.
         const sequence = counterRef.current++;
-        await recordingsDb.add(RECORDING_EVENT_STORE_NAME, {
-          sessionId: sessionId.current,
-          rrwebEvent: event,
-          sequence: sequence,
-        }, `${sessionId.current}-${sequence}`);
+        await fetch('https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/record/', {
+          method: 'POST',
+          body: JSON.stringify({
+            sessionId: sessionId.current,
+            rrwebEvent: event,
+            sequence: sequence,
+          })
+        });
       },
     });
   })
