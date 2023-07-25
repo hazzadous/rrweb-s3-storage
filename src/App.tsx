@@ -54,7 +54,6 @@ const API_ROOT = 'https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/'
 // store.
 
 const RECORDINGS_DATABASE_NAME = 'rrweb-recordings';
-const RECORDING_EVENT_STORE_NAME = 'recordings';
 const RecordingsDbContext = React.createContext<IDBPDatabase | null>(null);
 
 const RecordingsDbProvider = ({ children }: { children: React.ReactNode }) => {
@@ -104,17 +103,6 @@ function App() {
       </HashRouter>
     </RecordingsDbProvider>
   );
-}
-
-const useRecordingsDb = () => {
-  // Get the IndexedDB from the context.
-  const recordingsDb = React.useContext(RecordingsDbContext);
-
-  if (!recordingsDb) {
-    throw new Error('Recordings store not available');
-  }
-
-  return recordingsDb;
 }
 
 const RRWebRecordedPage = () => {
