@@ -1,0 +1,142 @@
+# An OpenAPI spec for a screen recordings API. It has routes for:
+#
+#  1. Creating a new recording, along with a screenshot of the page at that
+#     point in time, used as a thumbnail
+#  2. Adding rrweb events to a recording
+#  3. Getting a recording's events
+#  4. Getting a recording's metadata
+#  5. Listing all recordings
+#  6. Deleting a recording
+#
+# The API is designed to be used with the rrweb library, which is a
+# client-side library for recording user interactions with a web page.
+
+openapi: 3.0.0
+info:
+  title: Screen Recordings API
+  version: 1.0.0
+  description: An API for recording user interactions with a web page
+
+paths:
+  /recordings:
+    post:
+      summary: Create a new recording
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                screenshot:
+                  type: string
+                  format: base64
+                  description: Base64-encoded screenshot used as a thumbnail
+      responses:
+        201:
+          description: The recording was successfully created
+        400:
+          description: Invalid input
+
+    get:
+      summary: List all recordings
+      responses:
+        200:
+          description: A list of recordings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recording'
+        500:
+          description: Server error
+
+  /recordings/{recordingId}:
+    get:
+      summary: Get a recording's metadata
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: The metadata of the recording
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recording'
+        404:
+          description: Recording not found
+          
+    delete:
+      summary: Delete a recording
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: The recording was successfully deleted
+        404:
+          description: The recording was not found
+
+  /recordings/{recordingId}/events:
+    post:
+      summary: Add rrweb events to a recording
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+      responses:
+        201:
+          description: The rrweb events were successfully added
+        400:
+          description: Invalid input
+
+    get:
+      summary: Get a recording's events
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: A list of rrweb events for the recording
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        404:
+          description: Recording not found
+
+components:
+  schemas:
+    Recording:
+      type: object
+      properties:
+        id:
+          type: string
+        screenshot:
+          type: string
+          format: base64
+          description: Base64-encoded screenshot used as a thumbnail
+
