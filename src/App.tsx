@@ -131,8 +131,14 @@ const RRWebRecordedPage = () => {
       async emit(event) {
         // Persist the event to IndexedDB.
         const sequence = counterRef.current++;
+        // Send the event to the backend. We need to consider CORS here. We also
+        // need to ensure we have set the correct content-type header.
         await fetch('https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/record/', {
           method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             sessionId: sessionId.current,
             rrwebEvent: event,

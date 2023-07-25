@@ -107,6 +107,11 @@ resource "aws_api_gateway_method" "events" {
   http_method = "POST"
 
   authorization = "NONE"
+
+  // Make sure CORS is enabled.
+  request_parameters = {
+    "method.request.header.Access-Control-Allow-Origin" = true
+  }
 }
 
 // Create the aws_api_gateway_method_response that returns a 200 status code.
@@ -115,27 +120,111 @@ resource "aws_api_gateway_method_response" "events" {
   resource_id = aws_api_gateway_resource.record.id
   http_method = aws_api_gateway_method.events.http_method
   status_code = "200"
+
+  // Make sure CORS is enabled.
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+// As this is going to be accessed across origin, we need to include an OPTIONS 
+// method that ensures CORS is enabled.
+resource "aws_api_gateway_method" "events_options" {
+  rest_api_id = aws_api_gateway_rest_api.rrweb.id
+  resource_id = aws_api_gateway_resource.record.id
+  http_method = "OPTIONS"
+
+  authorization = "NONE"
+
+  // Make sure CORS is enabled.
+  request_parameters = {
+    "method.request.header.Access-Control-Allow-Headers" = true,
+    "method.request.header.Access-Control-Allow-Methods" = true,
+    "method.request.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+// Define the OPTIONS method response
+resource "aws_api_gateway_method_response" "events_options" {
+  rest_api_id = aws_api_gateway_rest_api.rrweb.id
+  resource_id = aws_api_gateway_resource.record.id
+  http_method = aws_api_gateway_method.events_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+// Define an integration for OPTIONS that just returns status code 200.
+resource "aws_api_gateway_integration" "events_options" {
+  rest_api_id             = aws_api_gateway_rest_api.rrweb.id
+  resource_id             = aws_api_gateway_resource.record.id
+  http_method             = aws_api_gateway_method.events_options.http_method
+  type                    = "MOCK"
+
+  request_templates = {
+    "application/json" = <<EOF
+{
+  "statusCode" : 200
+}
+EOF
+  }
+}
+
+// Define the integration response for OPTIONS.
+resource "aws_api_gateway_integration_response" "events_options" {
+  rest_api_id = aws_api_gateway_rest_api.rrweb.id
+  resource_id = aws_api_gateway_resource.record.id
+  http_method = aws_api_gateway_method.events_options.http_method
+  status_code = aws_api_gateway_method_response.events_options.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'",
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
 }
 
 // Create the API Gateway deployment.
 resource "aws_api_gateway_deployment" "rrweb" {
   rest_api_id = aws_api_gateway_rest_api.rrweb.id
 
-  depends_on = [
-    aws_api_gateway_integration.rrweb,
-  ]
+  triggers = {
+    // To ensure that the API Gateway is redeployed when any methods, resources, 
+    // or integrations change we use a hash of the JSON representation of the
+    // resources that we want to trigger a redeployment.
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_method.events,
+      aws_api_gateway_method_response.events,
+      aws_api_gateway_method.events_options,
+      aws_api_gateway_method_response.events_options,
+      aws_api_gateway_integration.events,
+      aws_api_gateway_integration_response.events,
+      aws_api_gateway_integration.events_options,
+      aws_api_gateway_integration_response.events_options,
+      aws_api_gateway_resource.record,
+    ]))
+  }
+
+  // Make sure we create a new deployment when the API Gateway is created.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 // Create the API Gateway Integration that sends the request body to the AWS
 // Kinesis Stream.
-resource "aws_api_gateway_integration" "rrweb" {
+resource "aws_api_gateway_integration" "events" {
   rest_api_id             = aws_api_gateway_rest_api.rrweb.id
   resource_id             = aws_api_gateway_resource.record.id
   http_method             = "POST"
   integration_http_method = "POST"
   type                    = "AWS"
   uri                     = "arn:aws:apigateway:${local.region}:kinesis:action/PutRecord"
-  passthrough_behavior    = "WHEN_NO_MATCH"
+  passthrough_behavior    = "NEVER"
   credentials                = aws_iam_role.rrweb.arn
 
   // Put the request body into the Data field, using the session id from the
@@ -153,35 +242,28 @@ resource "aws_api_gateway_integration" "rrweb" {
   //
   request_templates = {
     "application/json" = <<EOF
-
-  ## Parse the input JSON string into a map
-  #set($inputRoot = $util.parseJson($input.body))
-
-  ## Add the userId into the resulting record
-  $inputRoot.put("userId", "$context.identity.cognitoIdentityId")
-
   {
     "StreamName": "rrweb",
-    "Data": "$util.base64Encode($util.toJson($inputRoot))",
+    "Data": "$util.base64Encode($input.body)",
     "PartitionKey": "$input.path('$.sessionId')"
   }
 EOF
   }
-
-  depends_on = [
-    aws_api_gateway_method_response.events,
-  ]
 }
 
 // Create an API Gateway Integration Response that returns a 200 status code.
-resource "aws_api_gateway_integration_response" "rrweb" {
+resource "aws_api_gateway_integration_response" "events" {
   rest_api_id = aws_api_gateway_rest_api.rrweb.id
   resource_id = aws_api_gateway_resource.record.id
   http_method = aws_api_gateway_method.events.http_method
   status_code = aws_api_gateway_method_response.events.status_code
 
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
+
   depends_on = [
-    aws_api_gateway_integration.rrweb,
+    aws_api_gateway_integration.events
   ]
 }
 
@@ -207,7 +289,6 @@ resource "aws_api_gateway_stage" "rrweb" {
   xray_tracing_enabled = true
 
   depends_on = [
-    aws_api_gateway_deployment.rrweb,
     aws_api_gateway_account.rrweb,
     aws_cloudwatch_log_group.rrweb,
   ]
