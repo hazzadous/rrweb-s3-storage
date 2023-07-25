@@ -30,35 +30,83 @@ then
 fi
 
 # Randomly generate a session ID.
+USER_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
 SESSION_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
 BUCKET=hazzadous-rrweb
 
 set -e
 
+
+# POST a new rrweb recording to /recordings, including SESSION_ID, USER_ID, and
+# a snapshot, base64 encoded.
+echo "Posting rrweb recording to API Gateway endpoint"
+curl -X OPTIONS \
+  -H "Content-Type: application/json" \
+  -d '{"screenshot": "asdf"}' \
+  "$1/recordings/$SESSION_ID"
+curl -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{"screenshot": "asdf"}' \
+  "$1/recordings/$SESSION_ID"
+
+# Get the recording from the /recordings/{sessionId} endpoint
+echo "Getting rrweb recording from API Gateway endpoint"
+curl -X OPTIONS \
+  -H "Content-Type: application/json" \
+  "$1/recordings/$SESSION_ID"
+
+curl -X GET \
+  -H "Content-Type: application/json" \
+  "$1/recordings/$SESSION_ID"
+
+# Get all recordings from the /recordings endpoint
+echo "Getting all rrweb recordings from API Gateway endpoint"
+curl -X OPTIONS \
+  -H "Content-Type: application/json" \
+  "$1/recordings"
+curl -X GET \
+  -H "Content-Type: application/json" \
+  "$1/recordings"
+
 # POST an rrweb event to the API Gateway endpoint. We push up a few events to 
 # test the batching of events by firehose.
 echo "Posting rrweb event to API Gateway endpoint"
 for i in {1..3}; do
+  curl -X OPTIONS \
+    -H "Content-Type: application/json" \
+    -d '{"sessionId": "'"$SESSION_ID"'", "events": [{"type": "load", "timestamp": 1620000000000, "data": {"url": "https://www.example.com"}}]}' \
+    "$1/recordings/$SESSION_ID/events"
   curl -X POST \
     -H "Content-Type: application/json" \
     -d '{"sessionId": "'"$SESSION_ID"'", "events": [{"type": "load", "timestamp": 1620000000000, "data": {"url": "https://www.example.com"}}]}' \
-    "$1"
+    "$1/recordings/$SESSION_ID/events"
 done
 
 # Wait for the event to be ingested into S3. It should be no more than 60
-# seconds.
+# seconds. We fetch these events from /recordings/{sessionId}/events
 SECONDS=0
-echo "Waiting for event to be ingested into S3"
-while [ $SECONDS -lt 60 ]; do
-  if aws s3api list-objects-v2 --bucket $BUCKET --prefix rrweb/recordings/sessionId=$SESSION_ID | jq -r '.Contents | length' | grep -q 3; then
+echo "Waiting for rrweb event to be ingested into S3"
+while true; do
+  # Get the events from the /recordings/{sessionId}/events endpoint
+  curl -X OPTIONS \
+    -H "Content-Type: application/json" \
+    "$1/recordings/$SESSION_ID/events"
+  EVENTS=$(curl -X GET \
+    -H "Content-Type: application/json" \
+    "$1/recordings/$SESSION_ID/events")
+
+  # Check if the event has been ingested into S3
+  if [[ $EVENTS == *"https://www.example.com"* ]]; then
     echo "Event ingested into S3"
-    # Output the latest S3 object contents to help with debugging
-    aws s3api list-objects-v2 --bucket $BUCKET --prefix rrweb/recordings/sessionId=$SESSION_ID | jq -r '.Contents | sort_by(.LastModified) | last | .Key' | xargs aws s3api get-object --bucket $BUCKET --key | jq
-    exit 0
+    break
   fi
-  echo "Waiting for event to be ingested into S3"
+
+  # Check if we've waited more than 60 seconds
+  if [ $SECONDS -gt 120 ]; then
+    echo "Event not ingested into S3 after 60 seconds"
+    exit 1
+  fi
+
+  # Wait 1 second before checking again
   sleep 1
 done
-
-echo "Event not ingested into S3"
-exit 1

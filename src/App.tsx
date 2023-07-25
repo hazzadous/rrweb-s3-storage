@@ -25,6 +25,8 @@ import { HashRouter, Routes, Route, Link, useParams, Navigate } from "react-rout
 import { IDBPDatabase, openDB } from 'idb';
 import React from 'react';
 
+const API_ROOT = 'https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/'
+
 // For recordings storage we use IndexedDB. We use the idb library to provide
 // a simple wrapper around IndexedDB. The IndexedDB includes a single store
 // called 'recordings' which contains all the recordings events. Each event
@@ -127,13 +129,24 @@ const RRWebRecordedPage = () => {
 
   // Start rrweb recording on load.
   useEffect(() => {
+    // Create a recording with a PUT to /recordings/{sessionId}.
+    fetch(`${API_ROOT}/recordings/${sessionId.current}`, {
+      method: 'PUT',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId: sessionId.current,
+      })
+    });
     rrweb.record({
       async emit(event) {
         // Persist the event to IndexedDB.
         const sequence = counterRef.current++;
         // Send the event to the backend. We need to consider CORS here. We also
         // need to ensure we have set the correct content-type header.
-        await fetch('https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/record/', {
+        await fetch(`${API_ROOT}/recordings/${sessionId.current}/events`, {
           method: 'POST',
           mode: 'cors',
           headers: {
@@ -179,47 +192,49 @@ const RRWebRecordedPage = () => {
   );
 }
 
-const useRecordings = () => {
-  // Get the recordings from IndexedDB.
-  const [recordings, setRecordings] = useState<rrweb.EventType[]>([]);
-  const recordingsDb = useRecordingsDb();
+type Recordings = {
+  Items: {
+    sessionId: { "S": string },
+    createdAt: { "N": string },
+    screenshot: { "S": string },
+  }[]
+}
+
+const useRecordings = (): { recordings: Recordings } => {
+  // Query /recordings/ to get the list of recordings.
+  const [recordings, setRecordings] = useState<Recordings>({ Items: [] });
 
   useEffect(() => {
-    recordingsDb.getAllKeys(RECORDING_EVENT_STORE_NAME).then((keys) => {
-      // Get the unique session IDs from the keys. This isn't very efficient but
-      // will do for now. A nicer way would be to store the session metadata
-      // in a separate object store.
-      const sessionIds = keys.flatMap((key) => typeof key === 'string' ? [key.split('-').slice(0, -1).join("-")] : [])
-      // Filter out session IDs that have fewer than 5 events. This is to
-      // avoid showing sessions that were created by mistake. To do this we
-      // first group the events by session ID, and then filter out the
-      // sessions with fewer than 5 events.
-      const sessionIdsByCount = sessionIds.reduce((acc, sessionId) => {
-        acc[sessionId] = (acc[sessionId] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      const sessionIdsWithEnoughEvents = Object.entries(sessionIdsByCount).filter(([_, count]) => count >= 5).map(([sessionId, _]) => sessionId);
-      // Get the unique session IDs.
-      const uniqueSessionIds = [...new Set(sessionIdsWithEnoughEvents)];
-      setRecordings(uniqueSessionIds);
-    });
+    fetch(`${API_ROOT}/recordings/`)
+      .then((response) => response.json())
+      .then((data) => {
+        setRecordings(data);
+      });
   }, []);
 
-  return recordings;
+  return { recordings };
 }
 
 const useRecordingEvents = (sessionId: string) => {
-  // Get the events for a recording from IndexedDB.
+  // Get the events for a recording from /recordings/{sessionId}/events.
   const [events, setEvents] = useState<rrweb.EventType[]>([]);
-  const recordingsDb = useRecordingsDb();
 
   useEffect(() => {
-    recordingsDb.getAll(RECORDING_EVENT_STORE_NAME, IDBKeyRange.bound(`${sessionId}-0`, `${sessionId}-9999999`)
-    ).then((events) => {
-      // Sort the events by sequence number.
-      events.sort((a, b) => a.sequence - b.sequence);
-      setEvents(events.map((event) => event.rrwebEvent));
-    });
+    fetch(`${API_ROOT}/recordings/${sessionId}/events`, { mode: "cors" })
+      // We get JSONL back from the endpoint, pull out each rrwebEvent from each
+      // line and create an array of them.
+      .then((response) => response.text())
+      .then((data) => {
+        const lines = data.split('\n');
+        const events = lines.map((line) => {
+          if (line.length > 0) {
+            const event = JSON.parse(line);
+            return event.rrwebEvent;
+          }
+        });
+        setEvents(events);
+      }
+      );
   }, [sessionId]);
 
   return events;
@@ -229,7 +244,7 @@ const RecordingsListPage = () => {
   // Page that lists the recordings stored in IndexedDB to the left, and on
   // clicking on one, loads the player to the right. We link to the rrweb
   // recording playground page from here, opening it in a new tab.
-  const recordings = useRecordings();
+  const { recordings } = useRecordings();
   const { sessionId } = useParams();
 
   return (
@@ -238,9 +253,9 @@ const RecordingsListPage = () => {
         <Link target="_blank" to="/session">Open rrweb recording playground</Link>
         <h2>Recordings</h2>
         <ul>
-          {recordings.map((recording) => (
-            <li key={recording}>
-              <Link to={`/replay/${recording}`}>{recording}</Link>
+          {recordings.Items.map((recording) => (
+            <li key={recording.sessionId.S}>
+              <Link to={`/replay/${recording.sessionId.S}`}>{recording.sessionId.S}</Link>
             </li>
           ))}
         </ul>
