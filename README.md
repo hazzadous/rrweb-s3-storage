@@ -19,6 +19,11 @@ We define an API via AWS API Gateway which looks roughly like the
 
 ## Things left to do
 
+ 1. The recordings list endpoint currently uses Scan rather than Query and
+    returns all recordings which isn't very scaleable. Should switch this to
+    Query.
+ 1. We proxy through the AWS Service response in most cases, but it would be
+    better to map this structure to something more friendly to clients.
  1. Authentication via Cognito. We should be able to authenticate using API
     Gateway allowing us to partition recordings by userId thereby allowing users
     to securely store recordings.
