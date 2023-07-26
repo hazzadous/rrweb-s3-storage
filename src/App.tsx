@@ -3,8 +3,8 @@
 // We provide two screens, one with some example elements to interact with,
 // and one which provides a list of recordings to play back. Recordings are
 // defined as a list of events that are grouped by a session ID. Events are
-// persisted to IndexedDB, and then loaded from there when the user selects
-// a recording to play back.
+// persisted to DynamoDB and S3 via Kinesis, and then loaded from there when the
+// user selects a recording to play back.
 //
 // The default screen is the recordings screen, and there is a button you can
 // click to be taken to the example elements screen in a new tab. on loading the
@@ -44,12 +44,12 @@ function App() {
 }
 
 const RRWebRecordedPage = () => {
-  // A page on which there are some elements to interact with. The page
-  // creates a new session ID on load, and then records all events with
-  // that session ID into IndexedDB. To give some kind or order, we prefix the
-  // sessionID with the current timestamp in an iso1806 format to it's not too 
-  // hard to find the most recent session ID. We use a ref to store the session
-  // ID so that it doesn't change on re-renders.
+  // A page on which there are some elements to interact with. The page creates
+  // a new session ID on load, and then records all events with that session ID
+  // into the /recordings/<recordingId>/events endpoint. To give some kind or
+  // order, we prefix the sessionID with the current timestamp in an iso1806
+  // format to it's not too hard to find the most recent session ID. We use a
+  // ref to store the session ID so that it doesn't change on re-renders.
   const sessionId = useRef(`${new Date().toISOString()}-${v4()}`);
   const counterRef = useRef(0);
 
@@ -78,7 +78,7 @@ const RRWebRecordedPage = () => {
 
     rrweb.record({
       async emit(event) {
-        // Persist the event to IndexedDB.
+        // Persist the event.
         const sequence = counterRef.current++;
         // Send the event to the backend. We need to consider CORS here. We also
         // need to ensure we have set the correct content-type header.
@@ -186,7 +186,7 @@ const useRecordingEvents = (sessionId: string) => {
 }
 
 const RecordingsListPage = () => {
-  // Page that lists the recordings stored in IndexedDB to the left, and on
+  // Page that lists the recordings stored in DynamoDB/S3 to the left, and on
   // clicking on one, loads the player to the right. We link to the rrweb
   // recording playground page from here, opening it in a new tab.
   const { recordings } = useRecordings();
