@@ -58,9 +58,10 @@ const RRWebRecordedPage = () => {
     // Create a recording with a PUT to /recordings/{sessionId}.
     // We take a screenshot of the page and send it to the backend as the
     // screenshot field. We base64 encode the screenshot and send it as a string
-    // to the backend. we use html2canvas to take the screenshot.
+    // to the backend. we use html2canvas to take the screenshot. We downsample
+    // to 400px wide to save on bandwidth.
     html2canvas(document.body).then((canvas) => {
-      const screenshot = canvas.toDataURL();
+      const screenshot = canvas.toDataURL('image/jpeg', 0.1);
 
       fetch(`${API_ROOT}/recordings/${sessionId.current}`, {
         method: 'PUT',
