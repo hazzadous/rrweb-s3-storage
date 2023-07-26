@@ -672,7 +672,7 @@ resource "aws_api_gateway_method_response" "recordings_get" {
   }
 }
 
-// Create an API Gateway Integration that retrieves all the recording metadata objects from DynamoDB.
+// Create an API Gateway Integration that retrieves the latest 10 recordings metadata objects from DynamoDB.
 resource "aws_api_gateway_integration" "recordings_get" {
   rest_api_id             = aws_api_gateway_rest_api.rrweb.id
   resource_id             = aws_api_gateway_resource.recordings.id
@@ -683,7 +683,7 @@ resource "aws_api_gateway_integration" "recordings_get" {
   passthrough_behavior    = "NEVER"
   credentials             = aws_iam_role.rrweb.arn
 
-  // Put the request body into the Item field.
+  // Query the table for the latest 10 items, ordered by createdAt descending.
   request_templates = {
     "application/json" = <<EOF
   {
@@ -704,6 +704,25 @@ resource "aws_api_gateway_integration_response" "recordings_get" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin" = "'*'"
   }
+
+  // Transform the DynamoDB response to a list of sessionId, createdAt, and screenshot objects
+  // that can be returned to the client.
+#   response_templates = {
+#     "application/json" = <<EOF
+# #set($inputRoot = $input.path('$'))
+# {
+#   "recordings" : [
+#     #foreach($elem in $inputRoot.Items)
+#     {
+#       "sessionId" : "$elem.sessionId.S",
+#       "createdAt" : "$elem.createdAt.N",
+#       "screenshot" : "$elem.screenshot.S"
+#     }#if($foreach.hasNext),#end
+#     #end
+#   ]
+# }
+# EOF
+#   }
 
   depends_on = [
     aws_api_gateway_integration.recordings_get
@@ -777,22 +796,22 @@ resource "aws_api_gateway_integration_response" "recording_get" {
 
   // Transform the DynamoDB response to a list of sessionId, createdAt, and screenshot objects
   // that can be returned to the client.
-  response_templates = {
-    "application/json" = <<EOF
-#set($inputRoot = $input.path('$'))
-{
-  "recordings" : [
-    #foreach($elem in $inputRoot.Items)
-    {
-      "sessionId" : "$elem.sessionId.S",
-      "createdAt" : "$elem.createdAt.N",
-      "screenshot" : "$elem.screenshot.S"
-    }#if($foreach.hasNext),#end
-    #end
-  ]
-}
-EOF
-  }
+#   response_templates = {
+#     "application/json" = <<EOF
+# #set($inputRoot = $input.path('$'))
+# {
+#   "recordings" : [
+#     #foreach($elem in $inputRoot.Items)
+#     {
+#       "sessionId" : "$elem.sessionId.S",
+#       "createdAt" : "$elem.createdAt.N",
+#       "screenshot" : "$elem.screenshot.S"
+#     }#if($foreach.hasNext),#end
+#     #end
+#   ]
+# }
+# EOF
+#   }
 
   depends_on = [
     aws_api_gateway_integration.recording_get

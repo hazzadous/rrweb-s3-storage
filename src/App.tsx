@@ -22,86 +22,24 @@ import 'rrweb-player/dist/style.css';
 import { useRef, useEffect, useState } from 'react';
 import { v4 } from 'uuid';
 import { HashRouter, Routes, Route, Link, useParams, Navigate } from "react-router-dom";
-import { IDBPDatabase, openDB } from 'idb';
-import React from 'react';
+import html2canvas from 'html2canvas';
 
 const API_ROOT = 'https://5c39zvs723.execute-api.us-east-1.amazonaws.com/prod/'
 
-// For recordings storage we use IndexedDB. We use the idb library to provide
-// a simple wrapper around IndexedDB. The IndexedDB includes a single store
-// called 'recordings' which contains all the recordings events. Each event
-// is stored as a separate object. They are of the form:
-//
-// {
-//   sessionId: string,
-//   rrwebEvent: rrweb.EventType,
-//   sequence: number,
-// }
-//
-// The keys are the sessionId plus a sequence number, e.g.:
-//
-// 1234-0
-// 1234-1
-// 1234-2
-//
-// The sequence number is used to order the events.
-//
-// We open the IndexedDB in the RecordingsDbProvider, and then provide the
-// recordings and events to the RecordingsListPage and RRWebRecordedPage
-// components via a React context.
-//
-// If the IndexedDB version needs updating, we create the 'recordings' object
-// store.
-
-const RECORDINGS_DATABASE_NAME = 'rrweb-recordings';
-const RecordingsDbContext = React.createContext<IDBPDatabase | null>(null);
-
-const RecordingsDbProvider = ({ children }: { children: React.ReactNode }) => {
-  // Open the IndexedDB using the idb library.
-  const [recordingsDb, setRecordingsDb] = useState<IDBPDatabase | null>(null);
-
-  useEffect(() => {
-    // Open the IndexedDB. The IndexedDB includes a single store called
-    // 'recordings' which contains all the recordings events. Each event
-    // is stored as a separate object.
-    openDB(RECORDINGS_DATABASE_NAME, 1, {
-      upgrade(db, oldVersion) {
-        // Create the recordings store if 1 is between oldVersion and
-        // newVersion.
-        if (oldVersion < 1) {
-          db.createObjectStore('recordings');
-          console.info('Created recordings IndexedDB')
-        }
-      },
-    }).then((db) => {
-      setRecordingsDb(db);
-    }).catch((err) => {
-      console.error(err);
-    });
-  }, []);
-
-  return (
-    <RecordingsDbContext.Provider value={recordingsDb}>
-      {recordingsDb ? children : 'Loading...'}
-    </RecordingsDbContext.Provider>
-  );
-}
 
 function App() {
   // At the top level, we use React router to provide two screens, one for
   // the example elements and rrweb recording (RRWebRecordedPage), and one for
   // the recordings list and playback (RecordingsListPage).
   return (
-    <RecordingsDbProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/replay/" />} />
-          <Route path="/replay/" element={<RecordingsListPage />} />
-          <Route path="/replay/:sessionId" element={<RecordingsListPage />} />
-          <Route path="/session" element={<RRWebRecordedPage />} />
-        </Routes>
-      </HashRouter>
-    </RecordingsDbProvider>
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/replay/" />} />
+        <Route path="/replay/" element={<RecordingsListPage />} />
+        <Route path="/replay/:sessionId" element={<RecordingsListPage />} />
+        <Route path="/session" element={<RRWebRecordedPage />} />
+      </Routes>
+    </HashRouter>
   );
 }
 
@@ -118,16 +56,25 @@ const RRWebRecordedPage = () => {
   // Start rrweb recording on load.
   useEffect(() => {
     // Create a recording with a PUT to /recordings/{sessionId}.
-    fetch(`${API_ROOT}/recordings/${sessionId.current}`, {
-      method: 'PUT',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId: sessionId.current,
-      })
-    });
+    // We take a screenshot of the page and send it to the backend as the
+    // screenshot field. We base64 encode the screenshot and send it as a string
+    // to the backend. we use html2canvas to take the screenshot.
+    html2canvas(document.body).then((canvas) => {
+      const screenshot = canvas.toDataURL();
+
+      fetch(`${API_ROOT}/recordings/${sessionId.current}`, {
+        method: 'PUT',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: sessionId.current,
+          screenshot: screenshot,
+        })
+      });
+    })
+
     rrweb.record({
       async emit(event) {
         // Persist the event to IndexedDB.
@@ -205,27 +152,36 @@ const useRecordings = (): { recordings: Recordings } => {
 
 const useRecordingEvents = (sessionId: string) => {
   // Get the events for a recording from /recordings/{sessionId}/events.
-  const [events, setEvents] = useState<rrweb.EventType[]>([]);
+  const [state, setEvents] = useState<{ events: rrweb.EventType[], loading: boolean }>({ events: [], loading: true });
 
   useEffect(() => {
-    fetch(`${API_ROOT}/recordings/${sessionId}/events`, { mode: "cors" })
-      // We get JSONL back from the endpoint, pull out each rrwebEvent from each
-      // line and create an array of them.
-      .then((response) => response.text())
-      .then((data) => {
-        const lines = data.split('\n');
-        const events = lines.map((line) => {
-          if (line.length > 0) {
+    // We get JSONL back from the endpoint, pull out each rrwebEvent from each
+    // line and create an array of them. There may be no events at all, in which 
+    // case we want to set the loading state to true and poll until there are 
+    // events.
+    const getEvents = () => {
+      fetch(`${API_ROOT}/recordings/${sessionId}/events`)
+        .then((response) => response.text())
+        .then((data) => {
+          const events = data.split('\n').filter((line) => line.length > 0).map((line) => {
             const event = JSON.parse(line);
             return event.rrwebEvent;
+          });
+
+          if (events.length === 0) {
+            // If there are no events, poll until there are.
+            console.log('No events yet, polling...')
+            setTimeout(getEvents, 1000);
           }
+
+          setEvents({ events: events, loading: false });
         });
-        setEvents(events);
-      }
-      );
+    }
+
+    getEvents();
   }, [sessionId]);
 
-  return events;
+  return state;
 }
 
 const RecordingsListPage = () => {
@@ -243,11 +199,12 @@ const RecordingsListPage = () => {
         <ul>
           {recordings.Items.map((recording) => (
             <li key={recording.sessionId.S}>
-              <Link to={`/replay/${recording.sessionId.S}`}>{recording.sessionId.S}</Link>
-            </li>
+              <Link to={`/replay/${recording.sessionId.S}`}>{recording.sessionId.S}
+                <img src={recording.screenshot.S} width="400px" /></Link>
+            </li >
           ))}
-        </ul>
-      </div>
+        </ul >
+      </div >
       <div className="flex-1">
         {sessionId ? (
           <>
@@ -258,7 +215,7 @@ const RecordingsListPage = () => {
           <p>Select a recording to play.</p>
         )}
       </div>
-    </div>
+    </div >
   );
 }
 
@@ -269,7 +226,7 @@ const RRWebPlayerComponent = ({ sessionId }: { sessionId: string }) => {
   // to this player to the parent component.
   const playerElement = useRef<HTMLDivElement>(null);
   const playerRef = useRef<rrwebReplayer | null>(null);
-  const events = useRecordingEvents(sessionId);
+  const { events, loading } = useRecordingEvents(sessionId);
 
   useEffect(() => {
     if (playerElement.current && events.length > 2) {
@@ -301,8 +258,10 @@ const RRWebPlayerComponent = ({ sessionId }: { sessionId: string }) => {
   }, [playerElement.current, events]);
 
   // Render the player element
-  return (
+  return (<>
     <div className="rr-block" ref={playerElement} />
+    {loading && <p>Loading...</p>}
+  </>
   );
 }
 
