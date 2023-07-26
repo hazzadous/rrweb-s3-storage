@@ -45,6 +45,9 @@ We define an API via AWS API Gateway which looks roughly like the
     loading spinner to make the UX a little nicer.
  1. We make a lot of API calls for events. We could rather batch these calls to
     reduce costs.
+ 1. Add rate limiting to the API so avoid badly behaving clients.
+ 1. Add a Bookmarklet to allow users to easily test recordings with their own
+    sites.
  1. At the moment we are only using one release stage, which makes deployment a
     dangerous process. Rather, we should provide either per PR deployments
     and/or some method of promotion of known working configurations to
