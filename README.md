@@ -22,13 +22,13 @@ We define an API via AWS API Gateway which looks roughly like the
  1. Authentication via Cognito. We should be able to authenticate using API
     Gateway allowing us to partition recordings by userId thereby allowing users
     to securely store recordings.
- 2. Storing of screenshot data in S3. At the moment they are stored in DynamoDB
+ 1. Storing of screenshot data in S3. At the moment they are stored in DynamoDB
     which isn't ideal. Rather it would be better to push the contents to S3 and
     reference this instead. Options include creating another endpoint for
     pushing/retrieving the screenshot to/from S3, replacing the existing PUT
     /recordings/ integration with a Lambda function that would push to S3, or
     allowing pushing to S3 directly using a Cognito identity pool.
- 3. The storage of large website assets to S3 directly. Kinesis has a max
+ 1. The storage of large website assets to S3 directly. Kinesis has a max
     message size of 1MB which, for sites with large assets will result in large
     snapshot rrweb events. We could instead handling persistence of these assets
     to S3 directly and referencing these from the rrweb events. Something to
@@ -37,11 +37,19 @@ We define an API via AWS API Gateway which looks roughly like the
     API calls that would be necessary (and thereby optimizing costs) by only
     pushing assets that have not already been stored. What the implementation of
     that would look like is still to be hashed out.
- 4. At the moment we are only using one release stage, which makes deployment a
+ 1. At the moment we have a delay of 1 minute for the events to be available via
+    the /recordings/<recordingId>/events endpoint. We could employ e.g.
+    websockets and a Lambda as is demonstrated in
+    https://cloudonaut.io/serverless-websocket-api-api-gateway-kinesis-lambda/
+    to allow the events to be available sooner. Or we could use the screenshot +
+    loading spinner to make the UX a little nicer.
+ 1. We make a lot of API calls for events. We could rather batch these calls to
+    reduce costs.
+ 1. At the moment we are only using one release stage, which makes deployment a
     dangerous process. Rather, we should provide either per PR deployments
     and/or some method of promotion of known working configurations to
     production.
- 5. Proper testing. There is a script at ./infra/test.sh that I've been using to
+ 1. Proper testing. There is a script at ./infra/test.sh that I've been using to
     play with, but it's not ideal.
 
 A live example of the site can be found at
