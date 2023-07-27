@@ -2,7 +2,8 @@
 # It doesn't require any dependencies so we simply run pnpm build and upload the 
 # dist folder to GitHub pages, using the new upload-pages-artifact action.
 # The upload action is configured to run on push to main branch only, but the
-# rest of the workflow is triggered on any PR to main branch.
+# rest of the workflow is triggered on any PR to main branch. We only build on
+# changes to ./frontend/
 
 name: Build and deploy
 
@@ -10,9 +11,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'frontend/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'frontend/**'
 
 permissions:
   contents: read
@@ -22,6 +27,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -53,7 +61,7 @@ jobs:
       - name: Upload dist folder to GitHub pages
         uses: actions/upload-pages-artifact@v1
         with:
-          path: dist
+          path: frontend/dist
 
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/main'
