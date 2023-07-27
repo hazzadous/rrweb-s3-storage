@@ -433,6 +433,9 @@ resource "aws_api_gateway_stage" "rrweb" {
 
   xray_tracing_enabled = true
 
+  // Enable rate limiting for the API Gateway to cap spend.
+  throttling_rate_limit = 100
+
   depends_on = [
     aws_api_gateway_account.rrweb,
     aws_cloudwatch_log_group.rrweb,
