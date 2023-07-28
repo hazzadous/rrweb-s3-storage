@@ -65,7 +65,7 @@ jobs:
         working-directory: ./
 
       - run: pnpm install
-      - run: pnpm build --mode pages
+      - run: pnpm build --base https://hazzadous.github.io/rrweb-s3-storage
 
       - name: Upload dist folder to GitHub pages
         uses: actions/upload-pages-artifact@v1
