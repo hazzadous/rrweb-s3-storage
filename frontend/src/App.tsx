@@ -214,17 +214,54 @@ const RecordingsListPage = () => {
   // into the page will limit the sites on which this will work. It's possible
   // that we could also check to see if rrweb is already loaded, and if so, just
   // start recording thereby getting around this limitation.
+  //
+  // We sometimes get blocked from adding the script tag to the page, so in this
+  // case we want to display to say that it is not working by adding a message
+  // to the page and the console.
+  //
+  // We add a style to the element to fix it to the top of the page so that it
+  // doesn't scroll away.
   let bookmarkletFunction
   if (import.meta.env.MODE === 'development') {
     bookmarkletFunction = () => {
       const script = document.createElement('script');
       script.src = './bookmarklet.js';
+      script.onerror = () => {
+        console.log('Error loading bookmarklet script. Are you on a site that blocks adding script tags?');
+        const message = document.createElement('div');
+        message.style.position = 'fixed';
+        message.style.top = '0';
+        message.style.left = '0';
+        message.style.right = '0';
+        message.style.backgroundColor = 'red';
+        message.style.color = 'white';
+        message.style.padding = '1rem';
+        message.style.zIndex = '1000';
+
+        message.innerText = 'Error loading bookmarklet script. Are you on a site that blocks adding script tags?';
+        document.body.appendChild(message);
+      }
       document.body.appendChild(script);
     }
   } else {
     bookmarkletFunction = () => {
       const script = document.createElement('script');
       script.src = import.meta.env.BASE_URL + '/bookmarklet.js';
+      script.onerror = () => {
+        console.log('Error loading bookmarklet script. Are you on a site that blocks adding script tags?');
+        const message = document.createElement('div');
+        message.style.position = 'fixed';
+        message.style.top = '0';
+        message.style.left = '0';
+        message.style.right = '0';
+        message.style.backgroundColor = 'red';
+        message.style.color = 'white';
+        message.style.padding = '1rem';
+        message.style.zIndex = '1000';
+
+        message.innerText = 'Error loading bookmarklet script. Are you on a site that blocks adding script tags?';
+        document.body.appendChild(message);
+      }
       document.body.appendChild(script);
     }
   }
