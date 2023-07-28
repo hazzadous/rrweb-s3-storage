@@ -49,6 +49,7 @@ jobs:
 
       - uses: actions/cache@v3
         name: Setup pnpm cache
+        working-directory: ./
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -65,7 +66,7 @@ jobs:
         working-directory: ./
 
       - run: pnpm install
-      - run: pnpm build
+      - run: pnpm build --mode pages
 
       - name: Upload dist folder to GitHub pages
         uses: actions/upload-pages-artifact@v1

@@ -216,7 +216,7 @@ const RecordingsListPage = () => {
   // start recording thereby getting around this limitation.
   const bookmarkletFunction = () => {
     const script = document.createElement('script');
-    script.src = './bookmarklet.js';
+    script.src = import.meta.env.BASE_URL + '/bookmarklet.js';
     document.body.appendChild(script);
   }
 
