@@ -56,6 +56,15 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - run: pnpm install
+        working-directory: library
+
+      - run: pnpm install
+        working-directory: bookmarklet
+
+      - run: pnpm build
+        working-directory: ./
+
+      - run: pnpm install
       - run: pnpm build
 
       - name: Upload dist folder to GitHub pages
