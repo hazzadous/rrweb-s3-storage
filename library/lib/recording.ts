@@ -16,8 +16,8 @@ export const createRecording = async () => {
             sessionId: sessionId,
             // Take a screenshot of just the visible part of the page
             screenshot: (await html2canvas(document.body, {
-                windowWidth: document.documentElement.clientWidth,
-                windowHeight: document.documentElement.clientHeight,
+                windowWidth: document.documentElement.scrollWidth,
+                windowHeight: document.documentElement.scrollHeight,
             })).toDataURL('image/jpeg', 0.1)
         })
     });
