@@ -13,11 +13,15 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'library/**'
+      - 'bookmarklet/**'
   pull_request:
     branches:
       - main
     paths:
       - 'frontend/**'
+      - 'library/**'
+      - 'bookmarklet/**'
 
 permissions:
   contents: read

@@ -221,57 +221,35 @@ const RecordingsListPage = () => {
   //
   // We add a style to the element to fix it to the top of the page so that it
   // doesn't scroll away.
-  let bookmarkletFunction
-  if (import.meta.env.MODE === 'development') {
-    bookmarkletFunction = () => {
-      const script = document.createElement('script');
-      script.src = './bookmarklet.js';
-      script.onerror = () => {
-        console.log('Error loading bookmarklet script. Are you on a site that blocks adding script tags?');
-        const message = document.createElement('div');
-        message.style.position = 'fixed';
-        message.style.top = '0';
-        message.style.left = '0';
-        message.style.right = '0';
-        message.style.backgroundColor = 'red';
-        message.style.color = 'white';
-        message.style.padding = '1rem';
-        message.style.zIndex = '1000';
+  const bookmarkletFunction = () => {
+    const script = document.createElement('script');
+    script.src = '{base_url}/bookmarklet.js';
+    script.onerror = () => {
+      console.log('Error loading bookmarklet script. Are you on a site that blocks adding script tags?');
+      const message = document.createElement('div');
+      message.style.position = 'fixed';
+      message.style.top = '0';
+      message.style.left = '0';
+      message.style.right = '0';
+      message.style.backgroundColor = 'red';
+      message.style.color = 'white';
+      message.style.padding = '1rem';
+      message.style.zIndex = '1000';
 
-        message.innerText = 'Error loading bookmarklet script. Are you on a site that blocks adding script tags?';
-        document.body.appendChild(message);
-      }
-      document.body.appendChild(script);
+      message.innerText = 'Error loading bookmarklet script. Are you on a site that blocks adding script tags?';
+      document.body.appendChild(message);
     }
-  } else {
-    bookmarkletFunction = () => {
-      const script = document.createElement('script');
-      script.src = import.meta.env.BASE_URL + '/bookmarklet.js';
-      script.onerror = () => {
-        console.log('Error loading bookmarklet script. Are you on a site that blocks adding script tags?');
-        const message = document.createElement('div');
-        message.style.position = 'fixed';
-        message.style.top = '0';
-        message.style.left = '0';
-        message.style.right = '0';
-        message.style.backgroundColor = 'red';
-        message.style.color = 'white';
-        message.style.padding = '1rem';
-        message.style.zIndex = '1000';
-
-        message.innerText = 'Error loading bookmarklet script. Are you on a site that blocks adding script tags?';
-        document.body.appendChild(message);
-      }
-      document.body.appendChild(script);
-    }
+    document.body.appendChild(script);
   }
+
+  const baseUrl = import.meta.env.MODE !== "development" ? import.meta.env.BASE_URL : `${window.location.protocol}//${window.location.host}`
 
   return (
     <div className="flex">
       <div className="flex-1">
         <Link target="_blank" to="/session">Open rrweb recording playground</Link>
         <p>Drag this link to your bookmarks bar to record any website.</p>
-        <a href={`javascript:(${bookmarkletFunction.toString()})()`}>Record rrweb</a>
+        <a href={`javascript:(${bookmarkletFunction.toString().replace('{base_url}', baseUrl)})()`}>Record rrweb</a>
         <h2>Recordings</h2>
         <ul>
           {recordings.Items.map((recording) => (
