@@ -214,10 +214,19 @@ const RecordingsListPage = () => {
   // into the page will limit the sites on which this will work. It's possible
   // that we could also check to see if rrweb is already loaded, and if so, just
   // start recording thereby getting around this limitation.
-  const bookmarkletFunction = () => {
-    const script = document.createElement('script');
-    script.src = import.meta.env.BASE_URL + '/bookmarklet.js';
-    document.body.appendChild(script);
+  let bookmarkletFunction
+  if (import.meta.env.MODE === 'development') {
+    bookmarkletFunction = () => {
+      const script = document.createElement('script');
+      script.src = './bookmarklet.js';
+      document.body.appendChild(script);
+    }
+  } else {
+    bookmarkletFunction = () => {
+      const script = document.createElement('script');
+      script.src = import.meta.env.BASE_URL + '/bookmarklet.js';
+      document.body.appendChild(script);
+    }
   }
 
   return (
