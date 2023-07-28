@@ -14,7 +14,11 @@ export const createRecording = async () => {
         },
         body: JSON.stringify({
             sessionId: sessionId,
-            screenshot: (await html2canvas(document.body)).toDataURL('image/jpeg', 0.1)
+            // Take a screenshot of just the visible part of the page
+            screenshot: (await html2canvas(document.body, {
+                windowWidth: document.documentElement.clientWidth,
+                windowHeight: document.documentElement.clientHeight,
+            })).toDataURL('image/jpeg', 0.1)
         })
     });
 };
@@ -37,4 +41,3 @@ export const startRecording = async () => {
         },
     });
 }
-
