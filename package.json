@@ -1,0 +1,6 @@
+{
+    "name": "recordings",
+    "scripts": {
+        "build": "pnpm -C library build && pnpm -C bookmarklet build && cp bookmarklet/dist/bookmarklet.iife.js frontend/public/bookmarklet.js"
+    }
+}
