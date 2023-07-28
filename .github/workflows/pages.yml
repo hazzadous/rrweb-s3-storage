@@ -65,7 +65,7 @@ jobs:
         working-directory: ./
 
       - run: pnpm install
-      - run: pnpm build
+      - run: pnpm build --mode pages
 
       - name: Upload dist folder to GitHub pages
         uses: actions/upload-pages-artifact@v1
